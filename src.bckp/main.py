@@ -17,7 +17,6 @@ def main():
     # command line paser
     opt = parse.parse_arg()
 
-
     # GPU
     opt.cuda = opt.gpuid >= 0
     if opt.gpuid >= 0:
@@ -26,12 +25,7 @@ def main():
         logging.info("WARNING: RUN WITHOUT GPU")
     
     # prepare dataset    
-    opt.dataset = 'mnist'
     db = dataset.prepare_db(opt)
-
-    #add wavelets:
-    opt.wavelets = True
-    opt.cutoff = 20
     
     # initalize neural decision forest
     NDF = model.prepare_model(opt)
@@ -39,7 +33,7 @@ def main():
     # prepare optimizer
     optim, sche = optimizer.prepare_optim(NDF, opt)
     
-    # train the neural decision forest5
+    # train the neural decision forest
     best_acc = trainer.train(NDF, optim, sche, db, opt)
     logging.info('The best evaluation accuracy is %f'%best_acc)
 

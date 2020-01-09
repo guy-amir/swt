@@ -31,27 +31,6 @@ def prepare_db(opt):
                                                    ]))
         return {'train':train_dataset,'eval':eval_dataset}
 
-    # prepare Fashion-MNIST dataset
-    if opt.dataset == 'fashionmnist':
-        # training set
-        train_dataset = torchvision.datasets.MNIST('../data/fashionmnist', train=True, 
-                                                   download=True,
-                                                   transform=transforms.Compose([
-                                                       transforms.ToTensor(),
-                                                       transforms.Normalize((0.1307,), 
-                                                                            (0.3081,))
-                                                   ]))
-
-        # evaluation set
-        eval_dataset = torchvision.datasets.MNIST('../data/fashionmnist', train=False, 
-                                                  download=True,
-                                                   transform=transforms.Compose([
-                                                       transforms.ToTensor(),
-                                                       transforms.Normalize((0.1307,), 
-                                                                            (0.3081,))
-                                                   ]))
-        return {'train':train_dataset,'eval':eval_dataset}
-
     # prepare CIFAR-10 dataset
     elif opt.dataset == 'cifar10':
         # define the image transformation operators

@@ -156,17 +156,17 @@ def get_paths(dataset, model, tree_idx, name):
     return sample, paths, class_pred
 
 def get_node_saliency_map(dataset, model, tree_idx, node_idx, name):
-    """
-    get decision saliency maps for one specific splitting node
-    args:
+  """
+  get decision saliency maps for one specific splitting node
+  args:
     dataset: Pytorch dataset object
     model: pre-trained neural decision forest to visualize
     tree_idx: index of the tree
     node_idx: index of the splitting node
     name: name of the dataset
-    return:
+  return:
     gradient: computed decision saliency maps
-    """
+  """
     # pick some samples from the dataset
     sample_num = 5
     sample = get_sample(dataset, sample_num, name)
@@ -211,47 +211,47 @@ def get_node_saliency_map(dataset, model, tree_idx, node_idx, name):
     return gradient
 
 def get_map(model, sample, node_idx, tree_idx, name):
-	"""
-	helper function for computing the saliency map for a specified sample and splitting node
-	args:
-	    model: pre-trained neural decison forest to visualize
-	    sample: input image tensors
-	    node_idx: index of the splitting node
-	    tree_idx: index of the decison tree
-	    name:name of the dataset
-	return:
-	    saliency_map: computed decision saliency map
-	"""
-	# move to GPU
-	sample = sample.unsqueeze(dim=0).cuda()
-	# enable gradient computation for the input tensor
-	sample.requires_grad = True
-	# get feature vectors of the input samples
-	feat = model.feature_layer(sample)
-	# using_idx gives the indices of the neurons in the last FC layer that are used to compute routing probabilities 
-	using_idx = model.forest.trees[tree_idx].using_idx[node_idx]
-	# compute gradient by a backward pass
-	feat[:, using_idx].backward()
-	# get the gradient data
-	gradient = sample.grad.data
-	# normalize the gradient
-	gradient = normalize(torch.abs(gradient), name)
-	saliency_map = gradient.squeeze().cpu().numpy()
-	return saliency_map
+"""
+helper function for computing the saliency map for a specified sample and splitting node
+args:
+    model: pre-trained neural decison forest to visualize
+    sample: input image tensors
+    node_idx: index of the splitting node
+    tree_idx: index of the decison tree
+    name:name of the dataset
+return:
+    saliency_map: computed decision saliency map
+"""
+    # move to GPU
+    sample = sample.unsqueeze(dim=0).cuda()
+    # enable gradient computation for the input tensor
+    sample.requires_grad = True
+    # get feature vectors of the input samples
+    feat = model.feature_layer(sample)
+    # using_idx gives the indices of the neurons in the last FC layer that are used to compute routing probabilities 
+    using_idx = model.forest.trees[tree_idx].using_idx[node_idx]
+    # compute gradient by a backward pass
+    feat[:, using_idx].backward()
+    # get the gradient data
+    gradient = sample.grad.data
+    # normalize the gradient
+    gradient = normalize(torch.abs(gradient), name)
+    saliency_map = gradient.squeeze().cpu().numpy()
+    return saliency_map
 
 def get_path_saliency(samples, paths, class_pred, model, tree_idx, name, orientation = 'horizontal'):
-    """  
-    show the saliency maps for the input samples with their pre-computed computational paths 
-    args:
-      samples: input image tensor
-      paths: pre-computed computational paths for the inputs
-      class_pred: model predictons for the inputs
-      model: pre-trained neural decison forest
-      tree_idx: index of the decision tree
-      name: name of the dataset
-      orientation: layout of the figure
-    """
-        #plt.ioff()
+"""  
+show the saliency maps for the input samples with their pre-computed computational paths 
+args:
+  samples: input image tensor
+  paths: pre-computed computational paths for the inputs
+  class_pred: model predictons for the inputs
+  model: pre-trained neural decison forest
+  tree_idx: index of the decision tree
+  name: name of the dataset
+  orientation: layout of the figure
+"""
+    #plt.ioff()
     # plotting parameters
     plt.figure(figsize=(20,5))
     plt.rcParams.update({'font.size': 12})

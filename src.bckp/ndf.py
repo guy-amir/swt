@@ -5,8 +5,6 @@ from collections import OrderedDict
 import numpy as np
 import torch.nn.functional as F
 import resnet
-import wavelets as w
-
 # smallest positive float number
 FLT_MIN = float(np.finfo(np.float32).eps)
 FLT_MAX = float(np.finfo(np.float32).max)
@@ -95,10 +93,10 @@ class CIFAR10FeatureLayer(nn.Sequential):
 class Tree(nn.Module):
     def __init__(self, depth, feature_length, vector_length, use_cuda = False):
         """
+        Args:
             depth (int): depth of the neural decision tree.
             feature_length (int): number of neurons in the last feature layer
             vector_length (int): length of the mean vector stored at each tree leaf node
-            #GG I think vector length is actually the number of classes
         """
         super(Tree, self).__init__()
         self.depth = depth
@@ -108,22 +106,14 @@ class Tree(nn.Module):
         self.is_cuda = use_cuda
         # used in leaf node update 
         self.mu_cache = []
-        #GG
-        # self.nu_cache = []
         
-        onehot = np.eye(feature_length) 
-        #GG^ why onehot? returns matrix feature_lengthXfeature_length
+        onehot = np.eye(feature_length)
         # randomly use some neurons in the feature layer to compute decision function
         self.using_idx = np.random.choice(feature_length, self.n_leaf, replace=False)
-        #GG^ create a random vector of length n_leaf composed of numbers out of feature_length
-        #GG actually choosing the features for each leaf 
         self.feature_mask = onehot[self.using_idx].T
-        #GG^ feature mask is a vector with 1 at the location of each of the noted random variables
         self.feature_mask = Parameter(torch.from_numpy(self.feature_mask).type(torch.FloatTensor), requires_grad=False)
         # a leaf node contains a mean vector and a covariance matrix
-        self.pi = np.ones((self.n_leaf, self.vector_length))/self.vector_length
-        #GG^ pi i a matrix that has n_leaf rows and vector_length columns. each cell determines
-        #GG the probability of a certain leaf to refer to a feature
+        self.pi = np.zeros((self.n_leaf, self.vector_length))    
         if not use_cuda:
             self.pi = Parameter(torch.from_numpy(self.pi).type(torch.FloatTensor), requires_grad=False)
         else:
@@ -133,25 +123,22 @@ class Tree(nn.Module):
                         ('sigmoid', nn.Sigmoid()),
                         ]))
 
-
-    def forward(self, x, save_flag = False, wavelet=None):
+    def forward(self, x, save_flag = False):
         """
         Args:
             param x (Tensor): input feature batch of size [batch_size,n_features]
         Return:
             (Tensor): routing probability of size [batch_size,n_leaf]
-            #GG basically, returns mu
         """
-    #    def debug_hook(grad):
-    #        print('This is a debug hook')
-    #        print(grad.shape)
-    #        print(grad)        
+#        def debug_hook(grad):
+#            print('This is a debug hook')
+#            print(grad.shape)
+#            print(grad)        
         cache = {} # save some intermediate results for analysis
         if x.is_cuda and not self.feature_mask.is_cuda:
             self.feature_mask = self.feature_mask.cuda()
 
         feats = torch.mm(x, self.feature_mask) # ->[batch_size,n_leaf]
-        #GG^ x[batch size, feature_length] mm with feature_mask[feature_length,n_leaf]
         decision = self.decision(feats) # passed sigmoid->[batch_size,n_leaf]
 
         decision = torch.unsqueeze(decision,dim=2) # ->[batch_size,n_leaf,1]
@@ -167,8 +154,6 @@ class Tree(nn.Module):
         batch_size = x.size()[0]
         
         mu = x.data.new(batch_size,1,1).fill_(1.)
-        #GG^ new creates a new tensor of the same type and same CUDA.
-        #GG .fill_(1.) fills a tensor with 1.s
         begin_idx = 1
         end_idx = 2
         for n_layer in range(0, self.depth):
@@ -177,15 +162,13 @@ class Tree(nn.Module):
             mu = mu.repeat(1, 1, 2)
             # the routing probability at n_layer
             _decision = decision[:, begin_idx:end_idx, :] # -> [batch_size,2**n_layer,2]
-            #GG^ original decision tensor is [feature length, leaf_number,decision&compliment]
             mu = mu*_decision # -> [batch_size,2**n_layer,2]
             begin_idx = end_idx
             end_idx = begin_idx + 2 ** (n_layer+1)
             # merge left and right nodes to the same layer
             mu = mu.view(batch_size, -1, 1)
-            #GG print(f'begin_idx: {begin_idx}, end_idx {end_idx}, delta {-begin_idx+end_idx}')
-        mu = mu.view(batch_size, -1)
 
+        mu = mu.view(batch_size, -1)
         if save_flag:
             return mu, cache
         else:        
@@ -213,7 +196,6 @@ class Tree(nn.Module):
         :return: label probability [batch_size,n_class]
         """
         p = torch.mm(mu,pi)
-        # print('hi mama!')
         return p
     
     def update_label_distribution(self, target_batches):
@@ -224,10 +206,11 @@ class Tree(nn.Module):
             param target_batch (Tensor): target batch of size [batch_size, vector_length]
         """
         with torch.no_grad():
-            new_pi = self.pi.data.new(self.n_leaf, self.vector_length).fill_(.0) ##GG 1/self.vector_length) # Tensor [n_leaf,n_class] 
+            new_pi = self.pi.data.new(self.n_leaf, self.vector_length).fill_(0.) # Tensor [n_leaf,n_class] 
                 
             for mu, target in zip(self.mu_cache, target_batches):
                 prob = torch.mm(mu, self.pi)  # [batch_size,n_class]
+                
                 _target = target.unsqueeze(1) # [batch_size,1,n_class]
                 _pi = self.pi.unsqueeze(0) # [1,n_leaf,n_class]
                 _mu = mu.unsqueeze(2) # [batch_size,n_leaf,1]
@@ -240,14 +223,11 @@ class Tree(nn.Module):
         #if np.any(np.isnan(new_pi.cpu().numpy())):
         #    print(new_pi)
         # test
-        new_pi = F.softmax(new_pi, dim=1).data #GG??
+        new_pi = F.softmax(new_pi, dim=1).data
       
         self.pi = Parameter(new_pi, requires_grad = False)
         return
-
-    # def calc_wavelets(self):
-    #     self.w = wavelet(self)
-
+    
 class Forest(nn.Module):
     def __init__(self, n_tree, tree_depth, feature_length, vector_length, use_cuda = False):
         super(Forest, self).__init__()
@@ -260,26 +240,16 @@ class Forest(nn.Module):
             tree = Tree(tree_depth, feature_length, vector_length, use_cuda)
             self.trees.append(tree)
 
-    def forward(self, x, save_flag = False, wavelets=None):
+    def forward(self, x, save_flag = False):
         predictions = []
         cache = []
         for tree in self.trees:
             if save_flag:
                 mu, cache_tree = tree(x, save_flag = True)
-
                 p = tree.cal_prob(mu, tree.get_pi())
                 cache.append(cache_tree)
             else:    
-                mu, cache_tree = tree(x)
                 p = tree.pred(x)
-            ##GG::
-            if wavelets:
-                ww = w.wavelet(tree)
-                leaf_list = ww.cutoff(50)
-                nu  = w.mod_mu(mu,leaf_list)
-                pu  = w.mod_pi(tree.pi,leaf_list)
-                p = tree.cal_prob(nu, pu)
-
             predictions.append(p.unsqueeze(2))
         prediction = torch.cat(predictions, dim=2)
         prediction = torch.sum(prediction, dim=2)/self.n_tree
@@ -298,8 +268,8 @@ class NeuralDecisionForest(nn.Module):
         feats = self.feature_layer(x)
 
         if save_flag:
-            pred, cache = self.forest(feats, save_flag = True,wavelets=True)
+            pred, cache = self.forest(feats, save_flag = True)
             return pred, cache, 0
         else:
-            pred = self.forest(feats,wavelet)
+            pred = self.forest(feats)
             return pred

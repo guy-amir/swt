@@ -13,7 +13,7 @@ def parse_arg():
     # how many tree to use
     parser.add_argument('-n_tree', type=int, default=1)
     # tree depth
-    parser.add_argument('-tree_depth', type=int, default=7)
+    parser.add_argument('-tree_depth', type=int, default=9)
     # number of classes for the dataset
     parser.add_argument('-n_class', type=int, default=10)
     # 
@@ -23,7 +23,7 @@ def parse_arg():
     # choice of GPU
     parser.add_argument('-gpuid', type=int, default=0)
     # total number of training epochs
-    parser.add_argument('-epochs', type=int, default=6)
+    parser.add_argument('-epochs', type=int, default=350)
     # log every how many batches
     parser.add_argument('-report_every', type=int, default=20)
     # whether to save the trained model
